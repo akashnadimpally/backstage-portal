@@ -1,0 +1,74 @@
+{
+  "$defs": {
+    "RequiredComponent": {
+      "additionalProperties": false,
+      "properties": {
+        "module": {
+          "description": "Exact module key from the module catalog.",
+          "title": "Module",
+          "type": "string"
+        },
+        "purpose": {
+          "maxLength": 500,
+          "minLength": 3,
+          "title": "Purpose",
+          "type": "string"
+        },
+        "details": {
+          "default": "",
+          "description": "Every user-provided quantity, name, size, address range or relationship for this module.",
+          "maxLength": 2000,
+          "title": "Details",
+          "type": "string"
+        }
+      },
+      "required": [
+        "module",
+        "purpose"
+      ],
+      "title": "RequiredComponent",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "summary": {
+      "maxLength": 1000,
+      "minLength": 3,
+      "title": "Summary",
+      "type": "string"
+    },
+    "components": {
+      "items": {
+        "$ref": "#/$defs/RequiredComponent"
+      },
+      "maxItems": 40,
+      "minItems": 1,
+      "title": "Components",
+      "type": "array"
+    },
+    "assumptions": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 30,
+      "title": "Assumptions",
+      "type": "array"
+    },
+    "unsupported": {
+      "description": "Requested capabilities that no catalog module can satisfy.",
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 30,
+      "title": "Unsupported",
+      "type": "array"
+    }
+  },
+  "required": [
+    "summary",
+    "components"
+  ],
+  "title": "ParsedRequirements",
+  "type": "object"
+}

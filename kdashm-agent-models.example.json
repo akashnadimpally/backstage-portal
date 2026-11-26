@@ -1,0 +1,8 @@
+{
+  "openai_gpt": {
+    "API_ENDPOINT": "https://<resource-name>.openai.azure.com",
+    "MODEL_NAME": "<deployment-name>",
+    "API_VERSION": "2024-02-01",
+    "ACCESS_KEY": "<paste-api-key-here>"
+  }
+}

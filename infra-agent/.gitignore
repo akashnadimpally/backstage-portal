@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Generated per-request artifacts contain Terraform state and plans (may include sensitive data)
+generated/
+.terraform-plugin-cache/
+.terraform/
+*.tfstate
+*.tfstate.*
+tfplan

@@ -1,0 +1,94 @@
+{
+  "$defs": {
+    "ReviewFinding": {
+      "additionalProperties": false,
+      "properties": {
+        "severity": {
+          "enum": [
+            "critical",
+            "high",
+            "medium",
+            "low",
+            "info"
+          ],
+          "title": "Severity",
+          "type": "string"
+        },
+        "category": {
+          "enum": [
+            "requirement_mismatch",
+            "security",
+            "naming",
+            "dependency",
+            "policy",
+            "best_practice",
+            "other"
+          ],
+          "title": "Category",
+          "type": "string"
+        },
+        "module_call": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Module Call"
+        },
+        "message": {
+          "maxLength": 1000,
+          "minLength": 3,
+          "title": "Message",
+          "type": "string"
+        },
+        "recommendation": {
+          "default": "",
+          "maxLength": 1000,
+          "title": "Recommendation",
+          "type": "string"
+        }
+      },
+      "required": [
+        "severity",
+        "category",
+        "message"
+      ],
+      "title": "ReviewFinding",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "decision": {
+      "enum": [
+        "APPROVED",
+        "REJECTED"
+      ],
+      "title": "Decision",
+      "type": "string"
+    },
+    "summary": {
+      "default": "",
+      "maxLength": 2000,
+      "title": "Summary",
+      "type": "string"
+    },
+    "findings": {
+      "items": {
+        "$ref": "#/$defs/ReviewFinding"
+      },
+      "maxItems": 50,
+      "title": "Findings",
+      "type": "array"
+    }
+  },
+  "required": [
+    "decision"
+  ],
+  "title": "ReviewResult",
+  "type": "object"
+}

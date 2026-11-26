@@ -1,0 +1,109 @@
+# infra-agent configuration. Environment overrides:
+#   OLLAMA_BASE_URL            -> ollama.base_url
+#   AZURE_FOUNDRY_ENDPOINT     -> azure_foundry.endpoint
+#   INFRA_AGENT_MODULES_ROOT   -> modules.root
+#   INFRA_AGENT_CONFIG         -> alternative path to this file
+
+# --------------------------------------------------------------------------------------------
+# LLM providers: enable EXACTLY ONE of `ollama` or `azure_foundry` (enabled: true / false).
+# `models` are Ollama model names, or Azure AI Foundry DEPLOYMENT names, per agent role.
+# `temperature`: set a role to null for models that reject temperature (o-series / reasoning).
+# --------------------------------------------------------------------------------------------
+ollama:
+  enabled: true
+  base_url: "http://<OLLAMA_PLACEHOLDER>:11434"
+  timeout_seconds: 600
+  num_ctx: 16384
+  structured_output: schema      # schema = JSON-schema constrained output; json = plain JSON mode
+  max_json_retries: 2
+  models:
+    parser: deepseek-r1
+    generator: deepseek-r1
+    reviewer: deepseek-r1
+    repair: deepseek-r1
+  temperature:
+    parser: 0.0
+    generator: 0.1
+    reviewer: 0.0
+    repair: 0.0
+
+azure_foundry:
+  enabled: false
+  # PLACEHOLDER: your Foundry / AI Services / Azure OpenAI resource endpoint, e.g.
+  #   https://<resource>.services.ai.azure.com   or   https://<resource>.openai.azure.com
+  # (/openai/v1/chat/completions is appended automatically)
+  endpoint: "https://FOUNDRY_RESOURCE_PLACEHOLDER.services.ai.azure.com"
+  auth: entra_id                 # entra_id (DefaultAzureCredential: az login / managed identity) | api_key
+  api_key_env: AZURE_FOUNDRY_API_KEY   # only used when auth: api_key
+  token_scope: "https://ai.azure.com/.default"
+  timeout_seconds: 600
+  structured_output: schema      # schema = response_format json_schema; json = json_object
+  max_json_retries: 2
+  max_output_tokens: null        # e.g. 16000 for reasoning models; null = service default
+  models:                        # deployment names in your Foundry project
+    parser: gpt-4.1
+    generator: gpt-4.1
+    reviewer: gpt-4.1
+    repair: gpt-4.1
+  temperature:
+    parser: 0.0
+    generator: 0.1
+    reviewer: 0.0
+    repair: 0.0
+
+modules:
+  root: "../../terraform-modules/develop/modules/azure/hashicorp"
+  catalog_file: module-catalog/catalog.yaml
+
+paths:
+  generated_dir: generated/requests
+  plugin_cache_dir: .terraform-plugin-cache
+
+terraform:
+  binary: terraform
+  required_version: ">= 1.5.0"
+  azurerm_version: "~> 4.0"
+  timeouts:
+    init: 900
+    validation: 300
+    plan: 1800
+    apply: 3600
+
+static_checks:
+  tflint:
+    enabled: true
+    required: false          # true = fail if tflint is not installed
+    fail_on_findings: true   # only error-severity findings block
+  security:
+    tool: checkov            # checkov | trivy | tfsec | none
+    enabled: true
+    required: false
+    fail_on_findings: true
+
+loops:
+  max_generation_attempts: 3   # generator self-corrections against deterministic checks
+  max_review_rounds: 3         # generator <-> reviewer reflection rounds
+  max_repair_attempts: 5       # repair-agent attempts before the issue is shown to the user
+  max_transient_retries: 2     # plain retries for network/throttling errors (no LLM)
+
+policy:
+  allowed_locations: [eastus, eastus2, centralus, westus2, westeurope, northeurope, uksouth, centralindia]
+  allowed_modules: ["*"]
+  denied_modules: []
+  max_module_calls: 25
+  max_resource_changes: 100
+  allow_destroy: false
+  allow_replace: false
+  allowed_providers: ["registry.terraform.io/hashicorp/azurerm"]
+  denied_resource_types: []
+  required_tags: [environment, managed_by, request_id]
+  sensitive_input_patterns: [password, secret, connection_string, access_key, private_key, sas_token]
+  forbidden_input_values: { public_network_access_enabled: [true] }
+  # example: forbidden_input_values: { public_network_access_enabled: [true] }
+
+approval:
+  token_ttl_minutes: 60
+  secret_env: INFRA_AGENT_APPROVAL_SECRET
+
+azure:
+  subscription_id_env: ARM_SUBSCRIPTION_ID

@@ -1,0 +1,8 @@
+{
+  "name": "${{ values.name }}",
+  "version": "1.0.0",
+  "private": true,
+  "description": "${{ values.description }}",
+  "type": "module",
+  "scripts": { "start": "node src/worker.js", "test": "node --test" }
+}

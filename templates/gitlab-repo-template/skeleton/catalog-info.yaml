@@ -1,0 +1,14 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: ${{ values.name }}
+  {%- if values.description %}
+  description: ${{ values.description | dump }}
+  {%- endif %}
+  annotations:
+    gitlab.com/project-slug: ${{ values.destination.owner }}/${{ values.destination.repo }}
+    gitlab.com/instance: ${{ values.destination.host }}
+spec:
+  type: ${{ values.componentType }}
+  lifecycle: experimental
+  owner: ${{ values.owner }}

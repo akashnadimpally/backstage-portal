@@ -1,0 +1,11 @@
+# Template request. Describe your infrastructure in plain text; the agent maps it onto catalog modules.
+description: >
+  2 resource-groups, 1 RG contain vnet with 192.0.0.0/16 with 2 subnets and other contains 1 user assigned managed identity
+environment: dev            # dev | test | stage | prod
+location: eastus            # must be in policy.allowed_locations
+naming_prefix: skynet       # lowercase alphanumeric, 2-10 chars
+requested_by: Akash
+subscription_id: 9c0bfbac-2526-4512-b8ad-edf239cd8ff4  # optional; else ARM_SUBSCRIPTION_ID
+tags:
+  cost_center: "0000"
+  owner: nadimpally.akash@gds.ey.com

@@ -1,0 +1,80 @@
+{
+  "$defs": {
+    "OutputSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "value": {
+          "description": "Reference such as ${module.<call>.<output>[\"<key>\"]}",
+          "title": "Value",
+          "type": "string"
+        },
+        "description": {
+          "default": "",
+          "maxLength": 300,
+          "title": "Description",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "value"
+      ],
+      "title": "OutputSpec",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "target": {
+      "description": "Module call name being repaired, or '__outputs__'.",
+      "title": "Target",
+      "type": "string"
+    },
+    "inputs": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Complete replacement inputs for the target module call.",
+      "title": "Inputs"
+    },
+    "outputs": {
+      "anyOf": [
+        {
+          "items": {
+            "$ref": "#/$defs/OutputSpec"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Complete replacement outputs list (only when target is '__outputs__').",
+      "title": "Outputs"
+    },
+    "explanation": {
+      "maxLength": 1500,
+      "minLength": 3,
+      "title": "Explanation",
+      "type": "string"
+    }
+  },
+  "required": [
+    "target",
+    "explanation"
+  ],
+  "title": "RepairPatch",
+  "type": "object"
+}

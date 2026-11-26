@@ -1,0 +1,97 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: create-gitlab-repository
+  title: Create GitLab Repository
+  description: Create a repository on the configured GitLab instance and register it in the catalog.
+  tags:
+    - gitlab
+    - template
+    - repository
+    - service
+spec:
+  owner: user:guest
+  type: service
+
+  parameters:
+    - title: Service & Component Details
+      required:
+        - name
+        - description
+        - owner
+      properties:
+        name:
+          title: Repository / Component Name
+          type: string
+          description: Unique name of the repository and component
+          ui:autofocus: true
+        description:
+          title: Description
+          type: string
+          description: A short description of the service or repository
+        owner:
+          title: Owner
+          type: string
+          description: Owner of the component (e.g. user:guest or group:default/engineering)
+          default: user:guest
+        componentType:
+          title: Component Type
+          type: string
+          description: Type of software component
+          default: service
+          enum:
+            - service
+            - website
+            - library
+            - tool
+
+    - title: GitLab Repository Location
+      required:
+        - repoUrl
+      properties:
+        repoUrl:
+          title: Repository Location
+          type: string
+          description: Target GitLab namespace and repository name
+          ui:field: RepoUrlPicker
+          ui:options:
+            allowedHosts:
+              - 20.192.10.29
+            allowedOwners:
+              - skynet
+
+  steps:
+    - id: fetch-skeleton
+      name: Fetch Template Skeleton
+      action: fetch:template
+      input:
+        url: ./skeleton
+        values:
+          name: ${{ parameters.name }}
+          description: ${{ parameters.description }}
+          owner: ${{ parameters.owner }}
+          componentType: ${{ parameters.componentType }}
+          destination: ${{ parameters.repoUrl | parseRepoUrl }}
+
+    - id: publish-gitlab
+      name: Publish to GitLab
+      action: publish:gitlab
+      input:
+        description: ${{ parameters.description }}
+        repoUrl: ${{ parameters.repoUrl }}
+        defaultBranch: main
+
+    - id: register-catalog
+      name: Register Component in Catalog
+      action: catalog:register
+      input:
+        repoContentsUrl: ${{ steps['publish-gitlab'].output.repoContentsUrl }}
+        catalogInfoPath: '/catalog-info.yaml'
+
+  output:
+    links:
+      - title: Repository on GitLab
+        url: ${{ steps['publish-gitlab'].output.remoteUrl }}
+      - title: View in Catalog
+        icon: catalog
+        entityRef: ${{ steps['register-catalog'].output.entityRef }}

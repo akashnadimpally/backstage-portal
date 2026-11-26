@@ -1,0 +1,95 @@
+{
+  "$defs": {
+    "ModuleCall": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "description": "Terraform module block label, snake_case, unique.",
+          "title": "Name",
+          "type": "string"
+        },
+        "module": {
+          "description": "Exact module key from the module catalog.",
+          "title": "Module",
+          "type": "string"
+        },
+        "description": {
+          "default": "",
+          "maxLength": 500,
+          "title": "Description",
+          "type": "string"
+        },
+        "inputs": {
+          "additionalProperties": true,
+          "description": "Module variable name -> value.",
+          "title": "Inputs",
+          "type": "object"
+        }
+      },
+      "required": [
+        "name",
+        "module",
+        "inputs"
+      ],
+      "title": "ModuleCall",
+      "type": "object"
+    },
+    "OutputSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "value": {
+          "description": "Reference such as ${module.<call>.<output>[\"<key>\"]}",
+          "title": "Value",
+          "type": "string"
+        },
+        "description": {
+          "default": "",
+          "maxLength": 300,
+          "title": "Description",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "value"
+      ],
+      "title": "OutputSpec",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "summary": {
+      "default": "",
+      "maxLength": 2000,
+      "title": "Summary",
+      "type": "string"
+    },
+    "module_calls": {
+      "items": {
+        "$ref": "#/$defs/ModuleCall"
+      },
+      "maxItems": 100,
+      "minItems": 1,
+      "title": "Module Calls",
+      "type": "array"
+    },
+    "outputs": {
+      "items": {
+        "$ref": "#/$defs/OutputSpec"
+      },
+      "maxItems": 100,
+      "title": "Outputs",
+      "type": "array"
+    }
+  },
+  "required": [
+    "module_calls"
+  ],
+  "title": "GeneratedConfig",
+  "type": "object"
+}

@@ -1,0 +1,64 @@
+# ======================================================================
+# Dockerfile.frontend.windows — Backstage Frontend (Windows Containers)
+#
+# Multi-stage build: builds the React/Webpack frontend app bundle and
+# serves it via a lightweight Node.js static server.
+#
+# Build context: repo root
+# Requires Windows container mode in Docker Desktop.
+#
+# Pre-build steps (run in repo root before building):
+#   yarn install --immutable
+#   yarn tsc
+#   yarn workspace app build
+#
+# Build command:
+#   docker build -f Dockerfile.frontend.windows --tag backstage-frontend:windows .
+# ======================================================================
+
+# Stage 1 — Build the frontend
+FROM mcr.microsoft.com/windows/servercore:ltsc2022 AS builder
+
+SHELL ["powershell", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
+
+# Install Node.js 20 LTS
+ENV NODE_VERSION=20.11.1
+RUN Invoke-WebRequest -Uri "https://nodejs.org/dist/v$env:NODE_VERSION/node-v$env:NODE_VERSION-x64.msi" -OutFile node.msi ; \
+    Start-Process msiexec.exe -ArgumentList '/i', 'node.msi', '/quiet', '/norestart' -NoNewWindow -Wait ; \
+    Remove-Item node.msi
+
+RUN npm install -g yarn
+
+WORKDIR C:/app
+
+COPY package.json yarn.lock .yarnrc.yml ./
+COPY .yarn .yarn
+COPY packages/app/package.json packages/app/package.json
+COPY packages/backend/package.json packages/backend/package.json
+
+RUN yarn install --immutable
+
+COPY . .
+
+RUN yarn tsc ; yarn workspace app build
+
+# Stage 2 — Serve with Node.js static server (serve)
+FROM mcr.microsoft.com/windows/servercore:ltsc2022 AS runner
+
+SHELL ["powershell", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
+
+ENV NODE_VERSION=20.11.1
+RUN Invoke-WebRequest -Uri "https://nodejs.org/dist/v$env:NODE_VERSION/node-v$env:NODE_VERSION-x64.msi" -OutFile node.msi ; \
+    Start-Process msiexec.exe -ArgumentList '/i', 'node.msi', '/quiet', '/norestart' -NoNewWindow -Wait ; \
+    Remove-Item node.msi
+
+RUN npm install -g serve
+
+WORKDIR C:/app
+
+COPY --from=builder C:/app/packages/app/dist ./dist
+
+EXPOSE 3000
+
+# serve the static dist on port 3000; '-s' means SPA mode (redirect to index.html)
+CMD ["serve", "-s", "dist", "-l", "3000"]

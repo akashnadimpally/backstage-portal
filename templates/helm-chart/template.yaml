@@ -1,0 +1,59 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: helm-chart
+  title: Helm Chart
+  description: Scaffold a reusable Helm chart for a Kubernetes application.
+  tags: [kubernetes, helm, chart]
+spec:
+  owner: user:guest
+  type: service
+  parameters:
+    - title: Chart details
+      required: [name, description, owner, image, repoUrl]
+      properties:
+        name: { title: Chart name, type: string, pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$' }
+        description: { title: Description, type: string }
+        owner: { title: Owner, type: string, default: user:guest }
+        image: { title: Container image, type: string, default: nginx:1.27 }
+        repoUrl:
+          title: GitLab repository location
+          type: string
+          ui:field: RepoUrlPicker
+          ui:options:
+            allowedHosts:
+              - 20.192.10.29
+            allowedOwners:
+              - skynet
+  steps:
+    - id: fetch
+      name: Generate Helm chart
+      action: fetch:template
+      input:
+        url: ./skeleton
+        copyWithoutRender: [templates/**]
+        values:
+          name: ${{ parameters.name }}
+          description: ${{ parameters.description }}
+          owner: ${{ parameters.owner }}
+          image: ${{ parameters.image }}
+    - id: publish
+      name: Publish to GitLab
+      action: publish:gitlab
+      input:
+        repoUrl: ${{ parameters.repoUrl }}
+        description: ${{ parameters.description }}
+        defaultBranch: main
+    - id: register
+      name: Register in catalog
+      action: catalog:register
+      input:
+        repoContentsUrl: ${{ steps.publish.output.repoContentsUrl }}
+        catalogInfoPath: /catalog-info.yaml
+  output:
+    links:
+      - title: GitLab repository
+        url: ${{ steps.publish.output.remoteUrl }}
+      - title: Catalog component
+        icon: catalog
+        entityRef: ${{ steps.register.output.entityRef }}

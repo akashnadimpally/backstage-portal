@@ -1,0 +1,14 @@
+{
+  "name": "${{ values.name }}",
+  "version": "1.0.0",
+  "private": true,
+  "description": "${{ values.description }}",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "express": "^5.1.0"
+  }
+}

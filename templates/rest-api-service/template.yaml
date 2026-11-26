@@ -1,0 +1,71 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: rest-api-service
+  title: REST API Service
+  description: Scaffold a Node.js REST API with health checks and environment-based configuration.
+  tags: [nodejs, api, rest, service]
+spec:
+  owner: user:guest
+  type: service
+  parameters:
+    - title: Service details
+      required: [name, description, owner, port, repoUrl]
+      properties:
+        name:
+          title: Service name
+          type: string
+          pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
+        description:
+          title: Description
+          type: string
+        owner:
+          title: Owner
+          type: string
+          default: user:guest
+        port:
+          title: HTTP port
+          type: integer
+          default: 8080
+          minimum: 1
+          maximum: 65535
+        repoUrl:
+          title: GitLab repository location
+          type: string
+          ui:field: RepoUrlPicker
+          ui:options:
+            allowedHosts:
+              - 20.192.10.29
+            allowedOwners:
+              - skynet
+  steps:
+    - id: fetch
+      name: Generate REST API
+      action: fetch:template
+      input:
+        url: ./skeleton
+        values:
+          name: ${{ parameters.name }}
+          description: ${{ parameters.description }}
+          owner: ${{ parameters.owner }}
+          port: ${{ parameters.port }}
+    - id: publish
+      name: Publish to GitLab
+      action: publish:gitlab
+      input:
+        repoUrl: ${{ parameters.repoUrl }}
+        description: ${{ parameters.description }}
+        defaultBranch: main
+    - id: register
+      name: Register in catalog
+      action: catalog:register
+      input:
+        repoContentsUrl: ${{ steps.publish.output.repoContentsUrl }}
+        catalogInfoPath: /catalog-info.yaml
+  output:
+    links:
+      - title: GitLab repository
+        url: ${{ steps.publish.output.remoteUrl }}
+      - title: Catalog component
+        icon: catalog
+        entityRef: ${{ steps.register.output.entityRef }}

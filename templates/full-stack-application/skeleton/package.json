@@ -1,0 +1,9 @@
+{
+  "name": "${{ values.name }}",
+  "version": "1.0.0",
+  "private": true,
+  "description": "${{ values.description }}",
+  "workspaces": ["api", "web"],
+  "scripts": { "dev": "concurrently -k -n api,web \"npm run dev --workspace api\" \"npm run dev --workspace web\"" },
+  "devDependencies": { "concurrently": "^9.1.2" }
+}

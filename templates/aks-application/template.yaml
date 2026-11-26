@@ -1,0 +1,63 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: aks-application
+  title: AKS Application
+  description: Scaffold AKS manifests using Microsoft Entra Workload Identity, health probes, resource limits, and a PodDisruptionBudget.
+  tags: [azure, aks, kubernetes, workload-identity]
+spec:
+  owner: user:guest
+  type: service
+  parameters:
+    - title: AKS application details
+      required: [name, description, owner, image, workloadIdentityClientId, repoUrl]
+      properties:
+        name: { title: Application name, type: string, pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$' }
+        description: { title: Description, type: string }
+        owner: { title: Owner, type: string, default: user:guest }
+        image: { title: Container image, type: string }
+        workloadIdentityClientId:
+          title: User-assigned managed identity client ID
+          type: string
+          description: Client ID only; do not enter a secret.
+        repoUrl:
+          title: GitLab repository location
+          type: string
+          ui:field: RepoUrlPicker
+          ui:options:
+            allowedHosts:
+              - 20.192.10.29
+            allowedOwners:
+              - skynet
+  steps:
+    - id: fetch
+      name: Generate AKS manifests
+      action: fetch:template
+      input:
+        url: ./skeleton
+        values:
+          name: ${{ parameters.name }}
+          description: ${{ parameters.description }}
+          owner: ${{ parameters.owner }}
+          image: ${{ parameters.image }}
+          workloadIdentityClientId: ${{ parameters.workloadIdentityClientId }}
+    - id: publish
+      name: Publish to GitLab
+      action: publish:gitlab
+      input:
+        repoUrl: ${{ parameters.repoUrl }}
+        description: ${{ parameters.description }}
+        defaultBranch: main
+    - id: register
+      name: Register in catalog
+      action: catalog:register
+      input:
+        repoContentsUrl: ${{ steps.publish.output.repoContentsUrl }}
+        catalogInfoPath: /catalog-info.yaml
+  output:
+    links:
+      - title: GitLab repository
+        url: ${{ steps.publish.output.remoteUrl }}
+      - title: Catalog component
+        icon: catalog
+        entityRef: ${{ steps.register.output.entityRef }}

@@ -1,0 +1,98 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: create-github-repository
+  title: Create GitHub Repository
+  description: Template for creating a new repository on GitHub with standard project boilerplate, CI workflow, and Backstage catalog integration.
+  tags:
+    - github
+    - template
+    - repository
+    - service
+spec:
+  owner: user:guest
+  type: service
+
+  parameters:
+    - title: Service & Component Details
+      required:
+        - name
+        - description
+        - owner
+      properties:
+        name:
+          title: Repository / Component Name
+          type: string
+          description: Unique name of the repository and component
+          ui:autofocus: true
+          ui:options:
+            rows: 1
+        description:
+          title: Description
+          type: string
+          description: A short description of the service or repository
+        owner:
+          title: Owner
+          type: string
+          description: Owner of the component (e.g. user:guest or group:default/engineering)
+          default: user:guest
+        componentType:
+          title: Component Type
+          type: string
+          description: Type of software component
+          default: service
+          enum:
+            - service
+            - website
+            - library
+            - tool
+
+    - title: GitHub Repository Location
+      required:
+        - repoUrl
+      properties:
+        repoUrl:
+          title: Repository Location
+          type: string
+          description: Target GitHub organization/user and repository name
+          ui:field: RepoUrlPicker
+          ui:options:
+            allowedHosts:
+              - github.com
+
+  steps:
+    - id: fetch-skeleton
+      name: Fetch Template Skeleton
+      action: fetch:template
+      input:
+        url: ./skeleton
+        values:
+          name: ${{ parameters.name }}
+          description: ${{ parameters.description }}
+          owner: ${{ parameters.owner }}
+          componentType: ${{ parameters.componentType }}
+          destination: ${{ parameters.repoUrl | parseRepoUrl }}
+
+    - id: publish-github
+      name: Publish to GitHub
+      action: publish:github
+      input:
+        description: ${{ parameters.description }}
+        repoUrl: ${{ parameters.repoUrl }}
+        defaultBranch: main
+        protectDefaultBranch: false
+
+    - id: register-catalog
+      name: Register Component in Catalog
+      action: catalog:register
+      input:
+        repoContentsUrl: ${{ steps['publish-github'].output.repoContentsUrl }}
+        catalogInfoPath: '/catalog-info.yaml'
+
+  output:
+    links:
+      - title: Repository on GitHub
+        url: ${{ steps['publish-github'].output.remoteUrl }}
+      - title: View in Catalog
+        icon: catalog
+        entityRef: ${{ steps['register-catalog'].output.entityRef }}

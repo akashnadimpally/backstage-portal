@@ -1,0 +1,56 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: multi-agent-system
+  title: Multi-Agent System
+  description: Scaffold a Python multi-agent workflow with specialist handoffs and a FastAPI entry point.
+  tags: [ai, agents, workflow, python]
+spec:
+  owner: user:guest
+  type: service
+  parameters:
+    - title: System details
+      required: [name, description, owner, repoUrl]
+      properties:
+        name: { title: System name, type: string, pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$' }
+        description: { title: Description, type: string }
+        owner: { title: Owner, type: string, default: user:guest }
+        repoUrl:
+          title: GitLab repository location
+          type: string
+          ui:field: RepoUrlPicker
+          ui:options:
+            allowedHosts:
+              - 20.192.10.29
+            allowedOwners:
+              - skynet
+  steps:
+    - id: fetch
+      name: Generate multi-agent service
+      action: fetch:template
+      input:
+        url: ./skeleton
+        values:
+          name: ${{ parameters.name }}
+          description: ${{ parameters.description }}
+          owner: ${{ parameters.owner }}
+    - id: publish
+      name: Publish to GitLab
+      action: publish:gitlab
+      input:
+        repoUrl: ${{ parameters.repoUrl }}
+        description: ${{ parameters.description }}
+        defaultBranch: main
+    - id: register
+      name: Register in catalog
+      action: catalog:register
+      input:
+        repoContentsUrl: ${{ steps.publish.output.repoContentsUrl }}
+        catalogInfoPath: /catalog-info.yaml
+  output:
+    links:
+      - title: GitLab repository
+        url: ${{ steps.publish.output.remoteUrl }}
+      - title: Catalog component
+        icon: catalog
+        entityRef: ${{ steps.register.output.entityRef }}

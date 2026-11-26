@@ -1,0 +1,77 @@
+{
+  "$defs": {
+    "Environment": {
+      "enum": [
+        "dev",
+        "test",
+        "stage",
+        "prod"
+      ],
+      "title": "Environment",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "What the user asks for. Rejected deterministically before any LLM call.",
+  "properties": {
+    "description": {
+      "description": "Natural-language description of the desired Azure infrastructure.",
+      "maxLength": 4000,
+      "minLength": 20,
+      "title": "Description",
+      "type": "string"
+    },
+    "environment": {
+      "$ref": "#/$defs/Environment"
+    },
+    "location": {
+      "description": "Default Azure region, e.g. 'eastus'.",
+      "title": "Location",
+      "type": "string"
+    },
+    "naming_prefix": {
+      "description": "Lowercase alphanumeric prefix (2-10 chars) used in resource names.",
+      "pattern": "^[a-z][a-z0-9]{1,9}$",
+      "title": "Naming Prefix",
+      "type": "string"
+    },
+    "subscription_id": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Target subscription. Falls back to ARM_SUBSCRIPTION_ID when omitted.",
+      "title": "Subscription Id"
+    },
+    "requested_by": {
+      "maxLength": 128,
+      "minLength": 2,
+      "pattern": "^[A-Za-z0-9 ._@\\-]+$",
+      "title": "Requested By",
+      "type": "string"
+    },
+    "tags": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "maxProperties": 15,
+      "title": "Tags",
+      "type": "object"
+    }
+  },
+  "required": [
+    "description",
+    "environment",
+    "location",
+    "naming_prefix",
+    "requested_by"
+  ],
+  "title": "InfrastructureRequest",
+  "type": "object"
+}

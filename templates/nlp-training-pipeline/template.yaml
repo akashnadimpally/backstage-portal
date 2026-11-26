@@ -1,0 +1,93 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: nlp-training-pipeline
+  title: NLP Training Pipeline
+  description: Scaffold a continuous text-classification pipeline that ingests labeled text, trains, evaluates, and retrains a user-selected NLP model.
+  tags: [nlp, machine-learning, streaming, training, evaluation, python]
+spec:
+  owner: user:guest
+  type: service
+  parameters:
+    - title: Pipeline details
+      required: [name, description, owner, textColumn, labelColumn, modelKind, repoUrl]
+      properties:
+        name: { title: Pipeline name, type: string, pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$' }
+        description: { title: Description, type: string }
+        owner: { title: Owner, type: string, default: user:guest }
+        textColumn:
+          title: Text field
+          type: string
+          description: Field containing the input text in each streamed record.
+          default: text
+        labelColumn:
+          title: Label field
+          type: string
+          description: Field containing the supervised class label.
+          default: label
+        modelKind:
+          title: Starter NLP model
+          type: string
+          enum: [tfidf_logistic, tfidf_naive_bayes]
+          default: tfidf_logistic
+        minimumTrainingRows:
+          title: Minimum labeled rows before first training
+          type: integer
+          default: 100
+          minimum: 10
+        retrainEveryRecords:
+          title: Retrain after this many new labeled records
+          type: integer
+          default: 25
+          minimum: 1
+        testFraction:
+          title: Evaluation holdout fraction
+          type: number
+          default: 0.2
+          minimum: 0.05
+          maximum: 0.5
+        repoUrl:
+          title: GitLab repository location
+          type: string
+          ui:field: RepoUrlPicker
+          ui:options:
+            allowedHosts:
+              - 20.192.10.29
+            allowedOwners:
+              - skynet
+  steps:
+    - id: fetch
+      name: Generate NLP training pipeline
+      action: fetch:template
+      input:
+        url: ./skeleton
+        values:
+          name: ${{ parameters.name }}
+          description: ${{ parameters.description }}
+          owner: ${{ parameters.owner }}
+          textColumn: ${{ parameters.textColumn }}
+          labelColumn: ${{ parameters.labelColumn }}
+          modelKind: ${{ parameters.modelKind }}
+          minimumTrainingRows: ${{ parameters.minimumTrainingRows }}
+          retrainEveryRecords: ${{ parameters.retrainEveryRecords }}
+          testFraction: ${{ parameters.testFraction }}
+    - id: publish
+      name: Publish to GitLab
+      action: publish:gitlab
+      input:
+        repoUrl: ${{ parameters.repoUrl }}
+        description: ${{ parameters.description }}
+        defaultBranch: main
+    - id: register
+      name: Register in catalog
+      action: catalog:register
+      input:
+        repoContentsUrl: ${{ steps.publish.output.repoContentsUrl }}
+        catalogInfoPath: /catalog-info.yaml
+  output:
+    links:
+      - title: GitLab repository
+        url: ${{ steps.publish.output.remoteUrl }}
+      - title: Catalog component
+        icon: catalog
+        entityRef: ${{ steps.register.output.entityRef }}

@@ -1,0 +1,55 @@
+# ======================================================================
+# Dockerfile.backend.windows — Backstage Backend (Windows Containers)
+#
+# Build context: repo root
+# Requires Windows container mode in Docker Desktop.
+#
+# Pre-build steps (run in repo root before building):
+#   yarn install --immutable
+#   yarn tsc
+#   yarn build:backend
+#
+# Build command:
+#   docker build -f Dockerfile.backend.windows --tag backstage-backend:windows .
+# ======================================================================
+
+FROM mcr.microsoft.com/windows/servercore:ltsc2022
+
+SHELL ["powershell", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
+
+# Install Node.js 20 LTS
+ENV NODE_VERSION=20.11.1
+RUN Invoke-WebRequest -Uri "https://nodejs.org/dist/v$env:NODE_VERSION/node-v$env:NODE_VERSION-x64.msi" -OutFile node.msi ; \
+    Start-Process msiexec.exe -ArgumentList '/i', 'node.msi', '/quiet', '/norestart' -NoNewWindow -Wait ; \
+    Remove-Item node.msi
+
+# Install Yarn via npm
+RUN npm install -g yarn
+
+WORKDIR C:/app
+
+ENV NODE_ENV=production
+ENV NODE_OPTIONS="--no-node-snapshot"
+
+# Copy Yarn config
+COPY .yarn ./.yarn
+COPY .yarnrc.yml backstage.json ./
+
+# Copy package manifests and skeleton from the pre-built backend dist
+COPY yarn.lock package.json packages/backend/dist/skeleton.tar.gz ./
+
+# tar is available on modern Windows Server 2022
+RUN tar xzf skeleton.tar.gz ; Remove-Item skeleton.tar.gz
+
+# Install production dependencies only
+RUN yarn workspaces focus --all --production
+
+# Copy templates, examples, and bundle
+COPY examples ./examples
+COPY templates ./templates
+COPY packages/backend/dist/bundle.tar.gz app-config.yaml app-config.production.yaml ./
+RUN tar xzf bundle.tar.gz ; Remove-Item bundle.tar.gz
+
+EXPOSE 7007
+
+CMD ["node", "packages/backend", "--config", "app-config.yaml", "--config", "app-config.production.yaml"]
