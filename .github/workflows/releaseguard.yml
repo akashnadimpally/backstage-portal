@@ -1,0 +1,230 @@
+# ============================================================
+# .github/workflows/releaseguard.yml
+#
+# ReleaseGuard — Artifact Policy & Supply-Chain Hardening
+# https://github.com/Helixar-AI/ReleaseGuard
+#
+# Runs on every push to main/release branches and on PRs that
+# target main.  It builds the Backstage artifacts, then runs
+# ReleaseGuard to:
+#   1. Scan for embedded secrets / forbidden files
+#   2. Apply safe hardening transforms (strip source maps, etc.)
+#   3. Generate a CycloneDX SBOM
+#   4. Upload SARIF results to GitHub Code Scanning
+#   5. Upload the SBOM and hardened artifacts as workflow artifacts
+# ============================================================
+
+name: ReleaseGuard — Artifact Security
+
+on:
+  push:
+    branches:
+      - main
+      - "release/**"
+  pull_request:
+    branches:
+      - main
+  # Allow manual trigger from the GitHub Actions UI
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write   # Required to upload SARIF to Code Scanning
+  actions: read
+
+jobs:
+  # ─────────────────────────────────────────────────────────
+  # Job 1 — Build Backstage artifacts
+  # ─────────────────────────────────────────────────────────
+  build:
+    name: Build Backstage artifacts
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "yarn"
+
+      - name: Enable Corepack (Yarn 4)
+        run: corepack enable
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: TypeScript check
+        run: yarn tsc
+
+      - name: Build backend
+        run: yarn build:backend
+
+      - name: Build frontend
+        run: yarn workspace app build
+
+      # Cache the built artifacts so the releaseguard job can reuse them
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: backstage-dist
+          path: |
+            packages/backend/dist/
+            packages/app/dist/
+          retention-days: 1
+
+  # ─────────────────────────────────────────────────────────
+  # Job 2 — ReleaseGuard scan, harden, and SBOM
+  # ─────────────────────────────────────────────────────────
+  releaseguard:
+    name: ReleaseGuard — Scan & Harden
+    runs-on: ubuntu-latest
+    needs: build
+
+    env:
+      # Pin the ReleaseGuard version for reproducible runs.
+      # Bump this when upgrading.
+      RELEASEGUARD_VERSION: "latest"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: backstage-dist
+          path: .
+
+      # Install the ReleaseGuard CLI from the official releases
+      - name: Install ReleaseGuard CLI
+        run: |
+          set -euo pipefail
+          echo "Installing ReleaseGuard CLI..."
+          if [ "$RELEASEGUARD_VERSION" = "latest" ]; then
+            DOWNLOAD_VERSION=$(curl -fsSL https://api.github.com/repos/Helixar-AI/ReleaseGuard/releases/latest \
+              | grep '"tag_name"' | sed -E 's/.*"tag_name":\s*"([^"]+)".*/\1/')
+          else
+            DOWNLOAD_VERSION="$RELEASEGUARD_VERSION"
+          fi
+          echo "Resolved version: $DOWNLOAD_VERSION"
+          curl -fsSL \
+            "https://github.com/Helixar-AI/ReleaseGuard/releases/download/${DOWNLOAD_VERSION}/releaseguard_linux_amd64.tar.gz" \
+            -o releaseguard.tar.gz
+          tar -xzf releaseguard.tar.gz
+          chmod +x releaseguard
+          sudo mv releaseguard /usr/local/bin/releaseguard
+          echo "ReleaseGuard version: $(releaseguard --version)"
+
+      # ── 1. Artifact scan ──────────────────────────────────
+      - name: Scan artifacts for secrets and forbidden files
+        id: scan
+        # `|| true` lets later steps (SARIF upload, hardening) always run;
+        # the final "Assert clean" step fails the job on violations.
+        run: |
+          releaseguard check packages/backend/dist packages/app/dist \
+            --config .releaseguard.yml \
+            --output sarif \
+            --output-file releaseguard-results.sarif \
+            2>&1 | tee releaseguard-scan.log || true
+
+      # ── 2. Upload SARIF to GitHub Code Scanning ───────────
+      - name: Upload SARIF results to Code Scanning
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: releaseguard-results.sarif
+          category: releaseguard
+        continue-on-error: true  # Code Scanning may not be enabled on all plans
+
+      # ── 3. Apply hardening transforms ─────────────────────
+      - name: Apply hardening transforms
+        run: |
+          echo "Applying safe hardening transforms..."
+          releaseguard fix packages/backend/dist packages/app/dist \
+            --config .releaseguard.yml
+          echo "Hardening complete."
+
+      # ── 4. Generate SBOM ──────────────────────────────────
+      - name: Generate CycloneDX SBOM
+        run: |
+          releaseguard sbom packages/backend/dist packages/app/dist \
+            --config .releaseguard.yml \
+            --output sbom.json
+          echo "SBOM generated: $(wc -c < sbom.json) bytes"
+
+      # ── 5. Assert no high/critical violations remain ──────
+      - name: Assert clean — fail on policy violations
+        run: |
+          if grep -q '"level": "error"' releaseguard-results.sarif 2>/dev/null; then
+            echo "::error::ReleaseGuard found high/critical policy violations."
+            echo "Review the Security tab → Code Scanning alerts for details."
+            exit 1
+          fi
+          echo "✅ No high/critical violations found."
+
+      # ── 6. Upload hardened artifacts & SBOM ───────────────
+      - name: Upload hardened artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backstage-dist-hardened
+          path: |
+            packages/backend/dist/
+            packages/app/dist/
+          retention-days: 7
+
+      - name: Upload SBOM
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom.json
+          retention-days: 30
+
+      - name: Upload scan log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: releaseguard-scan-log
+          path: releaseguard-scan.log
+          retention-days: 7
+
+  # ─────────────────────────────────────────────────────────
+  # Job 3 — Verify hardened artifacts (optional smoke test)
+  # ─────────────────────────────────────────────────────────
+  verify:
+    name: Verify hardened artifacts
+    runs-on: ubuntu-latest
+    needs: releaseguard
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release/')
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download hardened artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: backstage-dist-hardened
+          path: .
+
+      - name: Install ReleaseGuard CLI
+        run: |
+          set -euo pipefail
+          DOWNLOAD_VERSION=$(curl -fsSL https://api.github.com/repos/Helixar-AI/ReleaseGuard/releases/latest \
+            | grep '"tag_name"' | sed -E 's/.*"tag_name":\s*"([^"]+)".*/\1/')
+          curl -fsSL \
+            "https://github.com/Helixar-AI/ReleaseGuard/releases/download/${DOWNLOAD_VERSION}/releaseguard_linux_amd64.tar.gz" \
+            -o releaseguard.tar.gz
+          tar -xzf releaseguard.tar.gz
+          chmod +x releaseguard
+          sudo mv releaseguard /usr/local/bin/releaseguard
+
+      - name: Verify hardened artifacts pass policy
+        run: |
+          releaseguard verify packages/backend/dist packages/app/dist \
+            --config .releaseguard.yml
+          echo "✅ Hardened artifacts verified clean."

@@ -178,6 +178,62 @@ yarn prettier:check      # Check formatting
 
 The Playwright configuration starts the frontend and backend when they are not already running. End-to-end tests may still require the configured database and other runtime prerequisites.
 
+## ReleaseGuard — Artifact Security & Supply-Chain Hardening
+
+Backstage Skynet integrates [ReleaseGuard](https://github.com/Helixar-AI/ReleaseGuard), an artifact policy engine that inspects the final `dist/` bundles **after** they are built but **before** they are published or deployed. It catches leaked secrets, accidentally shipped source maps, debug symbols, and forbidden files that standard code scanners miss.
+
+### What it does
+
+| Feature | Description |
+|---|---|
+| **Secret scanning** | Detects embedded API keys, PATs, Azure credentials, PEM keys, and JWT tokens inside build outputs |
+| **Forbidden file scan** | Rejects `.env`, `.map`, `.pem`, `.p12` files and leftover debug/swap files |
+| **Hardening transforms** | Strips source maps, scrubs metadata, removes forbidden files automatically |
+| **SBOM generation** | Produces a CycloneDX `sbom.json` covering both backend and frontend bundles |
+| **Policy enforcement** | Blocks CI on `high`/`critical` violations; emits a SARIF report to GitHub Code Scanning |
+| **Signing & attestation** | Keyless Sigstore signing and in-toto/SLSA provenance (disabled by default; enable in `.releaseguard.yml`) |
+
+### Configuration
+
+Policy rules live in [`.releaseguard.yml`](.releaseguard.yml) at the repository root. Adjust severity thresholds, pattern lists, and feature flags there.
+
+### CI — GitHub Actions
+
+The [`.github/workflows/releaseguard.yml`](.github/workflows/releaseguard.yml) workflow runs automatically on every push to `main` and `release/**` branches, and on PRs targeting `main`:
+
+1. **Build** — compiles backend and frontend artifacts
+2. **Scan** — inspects `packages/backend/dist/` and `packages/app/dist/` against policy
+3. **Harden** — applies safe transforms (source-map stripping, metadata scrubbing)
+4. **SBOM** — generates `sbom.json` in CycloneDX format
+5. **Verify** — confirms the hardened artifacts pass policy (on `main` / `release/**` only)
+
+SARIF results are uploaded to **GitHub → Security → Code Scanning**. Hardened artifacts and the SBOM are retained as workflow artifacts for 7 and 30 days respectively.
+
+### Local usage
+
+Install the CLI once, then run before pushing:
+
+```bash
+# 1. Install the ReleaseGuard CLI (fetches the latest release from GitHub)
+./releaseguard-local.sh install
+
+# 2. Build the project first
+yarn install --immutable && yarn tsc && yarn build:backend && yarn workspace app build
+
+# 3. Run the full hardening pipeline (fix → sbom → check)
+./releaseguard-local.sh harden
+
+# Or run individual steps:
+./releaseguard-local.sh check    # Scan for violations only
+./releaseguard-local.sh fix      # Apply hardening transforms
+./releaseguard-local.sh sbom     # Generate sbom.json
+./releaseguard-local.sh verify   # Verify hardened artifacts
+```
+
+The `RELEASEGUARD_VERSION` environment variable pins the CLI version (`latest` by default).
+
+---
+
 ## Container Deployment
 
 Build the backend and frontend artifacts first, then start one Compose stack from the repository root:

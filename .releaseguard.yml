@@ -1,0 +1,148 @@
+# ============================================================
+# .releaseguard.yml — ReleaseGuard Policy Configuration
+# https://github.com/Helixar-AI/ReleaseGuard
+#
+# Artifact policy engine for Backstage Skynet build outputs.
+# Scans dist/ bundles before publication/deployment to catch
+# leaked secrets, source maps, debug symbols, and forbidden
+# files that standard code scanners miss.
+# ============================================================
+
+version: "1"
+
+# ── Scan targets ────────────────────────────────────────────
+# Backend bundle (Node.js / tarball) and frontend SPA bundle
+scan:
+  paths:
+    - packages/backend/dist
+    - packages/app/dist
+  # Include compiled assets; skip raw node_modules and test dirs
+  exclude:
+    - "**/node_modules/**"
+    - "**/*.test.*"
+    - "**/__tests__/**"
+    - "**/e2e-tests/**"
+
+# ── Secret & credential scanning ────────────────────────────
+secrets:
+  enabled: true
+  # Fail the pipeline on any secret found in a release artifact
+  fail_on: critical
+  patterns:
+    # Generic high-entropy tokens
+    - name: Generic API key
+      regex: '(?i)(api[_\-]?key|api[_\-]?token|access[_\-]?key)\s*[:=]\s*["\']?[A-Za-z0-9/+]{20,}["\']?'
+      severity: critical
+    # GitHub personal access tokens
+    - name: GitHub PAT (classic)
+      regex: 'ghp_[A-Za-z0-9]{36}'
+      severity: critical
+    - name: GitHub fine-grained PAT
+      regex: 'github_pat_[A-Za-z0-9_]{82}'
+      severity: critical
+    # Azure credentials
+    - name: Azure Storage key
+      regex: 'DefaultEndpointsProtocol=https;AccountName=[^;]+;AccountKey=[A-Za-z0-9+/=]{88}'
+      severity: critical
+    - name: Azure SAS token
+      regex: 'sv=\d{4}-\d{2}-\d{2}&s[a-z]=&[A-Za-z0-9%&=]+'
+      severity: high
+    # PostgreSQL connection strings
+    - name: PostgreSQL DSN
+      regex: 'postgres(?:ql)?://[^:]+:[^@]+@[^/\s]+'
+      severity: critical
+    # Private keys
+    - name: PEM private key
+      regex: '-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----'
+      severity: critical
+    # Sigstore / OIDC tokens embedded in bundles
+    - name: JWT Bearer token
+      regex: 'Bearer\s+eyJ[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+'
+      severity: high
+
+# ── Forbidden file types ─────────────────────────────────────
+forbidden_files:
+  enabled: true
+  fail_on: high
+  rules:
+    - name: Source maps shipped to production
+      pattern: "**/*.map"
+      severity: high
+      message: "Source maps expose original TypeScript source; remove before releasing."
+    - name: Dot-env files
+      pattern: "**/.env*"
+      severity: critical
+      message: ".env files must never be bundled into release artifacts."
+    - name: Private key files
+      pattern: "**/*.pem"
+      severity: critical
+    - name: PKCS12 / certificate bundles
+      pattern: "**/*.p12"
+      severity: critical
+    - name: Keystore files
+      pattern: "**/*.jks"
+      severity: critical
+    - name: Leftover backup / swap files
+      pattern: "**/*~"
+      severity: low
+    - name: Vim swap files
+      pattern: "**/*.swp"
+      severity: low
+    - name: macOS DS_Store
+      pattern: "**/.DS_Store"
+      severity: low
+    - name: Temporary files
+      pattern: "**/*.tmp"
+      severity: low
+    - name: Yarn debug logs
+      pattern: "**/yarn-debug.log*"
+      severity: medium
+    - name: npm debug logs
+      pattern: "**/npm-debug.log*"
+      severity: medium
+
+# ── Hardening transforms  (releaseguard fix / harden) ───────
+hardening:
+  strip_source_maps: true       # Remove *.map files from dist/
+  strip_debug_symbols: false    # Not applicable for JS bundles
+  scrub_metadata: true          # Strip package-level metadata fields
+  remove_forbidden_files: true  # Auto-delete any matched forbidden_files
+
+# ── SBOM generation  (releaseguard sbom) ────────────────────
+sbom:
+  enabled: true
+  format: cyclonedx            # cyclonedx | spdx
+  output: sbom.json
+  enrich_vex: false            # Set true to fetch NVD/OSV vulnerability data
+
+# ── Signing & attestation  (releaseguard sign / attest) ─────
+signing:
+  enabled: false               # Enable when Sigstore / Fulcio is available in CI
+  keyless: true                # Use OIDC-based keyless signing via Sigstore
+  attestation:
+    slsa: false
+    in_toto: false
+
+# ── Policy enforcement ───────────────────────────────────────
+policy:
+  # Block the CI pipeline on these severities
+  fail_on_severity: high
+  # Emit a SARIF report alongside the console output
+  output_formats:
+    - console
+    - sarif                    # Uploaded to GitHub Code Scanning
+  sarif_output: releaseguard-results.sarif
+  # Automatically open a GitHub issue on critical violations
+  github_issues:
+    enabled: false             # Set true and supply GITHUB_TOKEN in CI
+    labels:
+      - "security"
+      - "release-guard"
+
+# ── Notifications ────────────────────────────────────────────
+notifications:
+  # Slack webhook URL — set via RELEASEGUARD_SLACK_WEBHOOK env var
+  slack:
+    enabled: false
+    on_failure: true
+    on_success: false
